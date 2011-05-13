@@ -22,20 +22,21 @@
  * email: stefanoviol [@] gmail [.] com
  * site: http://hacklabproject.org
  *
+ * Tanks Francesco Gugliuzza aka JackTheVendicator for "Turbo Force Mode"
  */
 
-#define OVERCLOCK_614400
+#define UNDERCLOCK_30720
+#define UNDERCLOCK_61440
+//#define UNDERCLOCK_49152
+//#define OVERCLOCK_614400
 //#define OVERCLOCK_633600
 #define OVERCLOCK_652800
-//#define OVERCLOCK_672000
+#define OVERCLOCK_672000
 #define OVERCLOCK_691200
-//#define OVERCLOCK_710400
-//#define OVERCLOCK_729600
-//#define OVERCLOCK_748800
+#define OVERCLOCK_710400
+#define OVERCLOCK_729600
+#define OVERCLOCK_748800
 //#define OVERCLOCK_768000
-
-#define UNDERCLOCK_61440
-#define UNDERCLOCK_49152
 
 #include <linux/version.h>
 #include <linux/kernel.h>
@@ -59,7 +60,6 @@
 #include "acpuclock.h"
 #include "socinfo.h"
 
-//test
 
 #define A11S_CLK_CNTL_ADDR (MSM_CSR_BASE + 0x100)
 #define A11S_CLK_SEL_ADDR (MSM_CSR_BASE + 0x104)
@@ -197,6 +197,9 @@ static struct clkctl_acpu_speed pll0_196_pll1_960_pll2_1056[] = {
 /* 7x27 normal with GSM capable modem */
 static struct clkctl_acpu_speed pll0_245_pll1_960_pll2_1200[] = {
 	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 30720 },
+#ifdef UNDERCLOCK_30720
+	{ 1,  30720, ACPU_PLL_0, 4, 7,  15360, 1, 1,  30720 },
+#endif
 #ifdef UNDERCLOCK_49152
 	{ 1,  49152, ACPU_PLL_0, 4, 4,  24576, 1, 2,  30720 },
 #endif
@@ -207,9 +210,9 @@ static struct clkctl_acpu_speed pll0_245_pll1_960_pll2_1200[] = {
 	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1, 3,  61440 },
 	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2, 4,  61440 },
 	{ 1, 245760, ACPU_PLL_0, 4, 0, 122880, 1, 4,  61440 },
-	{ 1, 320000, ACPU_PLL_1, 1, 2, 160000, 1, 5, 122880 },
+	{ 1, 352000, ACPU_PLL_1, 1, 2, 176000, 1, 5, 122880 },
 	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 5, 122880 },
-	{ 1, 480000, ACPU_PLL_1, 1, 1, 160000, 2, 6, 122880 },
+	{ 1, 528000, ACPU_PLL_1, 1, 1, 176000, 2, 6, 122880 },
 	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
 #ifdef OVERCLOCK_614400
          { 1, 614400, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
@@ -236,7 +239,7 @@ static struct clkctl_acpu_speed pll0_245_pll1_960_pll2_1200[] = {
         { 1, 748800, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
 #endif
 #ifdef OVERCLOCK_768000
-	{ 1, 768000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
+	{ 1, 768000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 200000 },
 #endif
 	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
@@ -456,12 +459,14 @@ static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s) {
 
 	a11_div=hunt_s->a11clk_src_div;
 
-	// Perform overclocking if requested
-	if(hunt_s->a11clk_khz>600000) {
+	//estebanSannin OC system
+#define custom_frequency 537600
+	if(hunt_s->a11clk_khz>600000 || hunt_s->a11clk_khz==custom_frequency) {
 		a11_div=0;
 		writel(hunt_s->a11clk_khz/19200, MSM_CLK_CTL_BASE+0x33C);
 		udelay(50);
 	}
+
 
 	/*
 	 * If the new clock divider is higher than the previous, then
@@ -743,6 +748,8 @@ uint32_t acpuclk_get_switch_time(void)
 #define REG2DIV(n)		((n)+1)
 #define SLOWER_BY(div, factor)	div = DIV2REG(REG2DIV(div) * factor)
 
+
+
 static void __init acpu_freq_tbl_fixup(void)
 {
 	unsigned long pll0_l, pll1_l, pll2_l;
@@ -753,6 +760,9 @@ static void __init acpu_freq_tbl_fixup(void)
 
 	/* Wait for the PLLs to be initialized and then read their frequency.
 	 */
+	pr_info("\nOverClock/Underclock Enabled\n\n");
+	pr_info("by Stefano Viola\n");
+	pr_info("estebanSannin\n");
 	do {
 		pll0_l = readl(PLLn_L_VAL(0)) & 0x3f;
 		cpu_relax();
@@ -962,6 +972,12 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	precompute_stepping();
 	if (cpu_is_msm7x25())
 		msm7x25_acpu_pll_hw_bug_fix();
+	
+	//estebanSannin and JackTheVendicator
+	printk("FORCING TURBO MODE enabled!\n");
+		writel(55, MSM_CLK_CTL_BASE+0x320);
+		udelay(50);
+	
 	acpuclk_init();
 	lpj_init();
 	print_acpu_freq_tbl();
